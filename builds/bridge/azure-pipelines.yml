@@ -25,7 +25,7 @@ stages:
 
     - script: |
         dotnet tool install --global GitVersion.Tool --version 5.12.0
-        gitversion /output buildserver
+        dotnet-gitversion /output buildserver
       displayName: 'Install and Run GitVersion'
 
     - script: |
@@ -91,7 +91,6 @@ stages:
   dependsOn: BuildAndTest
   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
   variables:
-    azureSubscription: 'prod-fransync-subscription'
     containerAppName: 'fransync-bridging'
     resourceGroupName: 'prod-fransync-rg'
     version: $[ stageDependencies.BuildAndTest.Build.outputs['setVersionVars.Version'] ]
