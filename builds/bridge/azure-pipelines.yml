@@ -7,7 +7,7 @@ pool:
 variables:
   buildConfiguration: 'Release'
   dotnetVersion: '9.0.x'
-  containerRegistry: 'shongo'
+  containerRegistry: 'shongo.azurecr.io'
   imageName: 'fransync-bridging'
 
 stages:
@@ -98,7 +98,7 @@ stages:
       displayName: 'Build Docker Image'
       inputs:
         command: 'buildAndPush'
-        repository: '$(containerRegistry)/$(imageName)'
+        repository: '$(imageName)'
         dockerfile: 'src/Fransync.Bridging.WebService/Dockerfile'
         containerRegistry: 'shongo-azure-registry'
         buildContext: '.'
