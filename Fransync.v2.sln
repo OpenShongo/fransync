@@ -9,6 +9,19 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fransync.Client", "src\Fran
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fransync.Client.Console", "src\Fransync.Client.Console\Fransync.Client.Console.csproj", "{2D676DA8-E5AC-4B6B-873E-5C047D7125A2}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution items", "Solution items", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+	ProjectSection(SolutionItems) = preProject
+		.dockerignore = .dockerignore
+		.gitignore = .gitignore
+		README.md = README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Builds", "Builds", "{CC8973FD-0C63-4C07-BBF4-42829E795287}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "bridge", "bridge", "{768AC57A-0079-48BF-BAC4-E79B7F80EB5D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "NewFolder1", "NewFolder1", "{290E70D1-2EEC-43BC-B1E6-AFEC35954E47}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,6 +43,11 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{CC8973FD-0C63-4C07-BBF4-42829E795287} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{768AC57A-0079-48BF-BAC4-E79B7F80EB5D} = {CC8973FD-0C63-4C07-BBF4-42829E795287}
+		{290E70D1-2EEC-43BC-B1E6-AFEC35954E47} = {CC8973FD-0C63-4C07-BBF4-42829E795287}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {FA7BC4A6-BDA7-4E99-8FB8-33B52100A66D}
