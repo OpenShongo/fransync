@@ -11,18 +11,13 @@ RUN dotnet restore "src/Fransync.Bridging.WebService/Fransync.Bridging.WebServic
 COPY . .
 WORKDIR "/src/src/Fransync.Bridging.WebService"
 
-# Build and publish the application
 RUN dotnet build "Fransync.Bridging.WebService.csproj" -c Release -o /app/build \
     /p:Version=${VERSION} \
-    /p:AssemblyVersion=${VERSION} \
-    /p:FileVersion=${VERSION} \
     /p:InformationalVersion=${VERSION}
 
 RUN dotnet publish "Fransync.Bridging.WebService.csproj" -c Release -o /app/publish \
     /p:UseAppHost=false \
     /p:Version=${VERSION} \
-    /p:AssemblyVersion=${VERSION} \
-    /p:FileVersion=${VERSION} \
     /p:InformationalVersion=${VERSION}
 
 # Runtime stage

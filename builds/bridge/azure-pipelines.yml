@@ -40,6 +40,10 @@ stages:
         FILE_VER=$(echo "$GITVERSION_OUTPUT" | jq -r '.AssemblySemFileVer')
         INFO_VER=$(echo "$GITVERSION_OUTPUT" | jq -r '.InformationalVersion')
         MAJOR_MINOR_PATCH=$(echo "$GITVERSION_OUTPUT" | jq -r '.MajorMinorPatch')
+        COMMITS_SINCE_VERSION=$(echo "$GITVERSION_OUTPUT" | jq -r '.CommitsSinceVersionSource')
+        
+        # Create custom version with build number: Major.Minor.Patch.BuildNumber
+        CUSTOM_VERSION="$MAJOR_MINOR_PATCH.$COMMITS_SINCE_VERSION"
         
         # Set pipeline variables for immediate use
         echo "##vso[task.setvariable variable=GitVersionSemVer]$SEMVER"
@@ -47,12 +51,14 @@ stages:
         echo "##vso[task.setvariable variable=GitVersionAssemblySemFileVer]$FILE_VER"
         echo "##vso[task.setvariable variable=GitVersionInformationalVersion]$INFO_VER"
         echo "##vso[task.setvariable variable=GitVersionMajorMinorPatch]$MAJOR_MINOR_PATCH"
+        echo "##vso[task.setvariable variable=GitVersionCustomVersion]$CUSTOM_VERSION"
         
         # Set output variables for later stages
         echo "##vso[task.setvariable variable=Version;isOutput=true]$SEMVER"
         echo "##vso[task.setvariable variable=AssemblyVersion;isOutput=true]$ASSEMBLY_VER"
         echo "##vso[task.setvariable variable=FileVersion;isOutput=true]$FILE_VER"
         echo "##vso[task.setvariable variable=InformationalVersion;isOutput=true]$INFO_VER"
+        echo "##vso[task.setvariable variable=CustomVersion;isOutput=true]$CUSTOM_VERSION"
         
         # Display the versions for debugging
         echo "Version: $SEMVER"
@@ -60,6 +66,8 @@ stages:
         echo "File Version: $FILE_VER"
         echo "Informational Version: $INFO_VER"
         echo "Major.Minor.Patch: $MAJOR_MINOR_PATCH"
+        echo "Custom Version (with build number): $CUSTOM_VERSION"
+        echo "Commits Since Version Source: $COMMITS_SINCE_VERSION"
       displayName: 'Install and Run GitVersion'
       name: setVersionVars
 
@@ -96,8 +104,9 @@ stages:
         tags: |
           $(GitVersionSemVer)
           $(GitVersionMajorMinorPatch)
+          $(GitVersionCustomVersion)
           latest
-        arguments: '--build-arg VERSION=$(GitVersionSemVer)'
+        arguments: '--build-arg VERSION=$(GitVersionCustomVersion)'
 
     - task: Docker@2
       displayName: 'Push Docker Image to ACR'
@@ -108,6 +117,7 @@ stages:
         tags: |
           $(GitVersionSemVer)
           $(GitVersionMajorMinorPatch)
+          $(GitVersionCustomVersion)
           latest
 
 - stage: Production
@@ -117,7 +127,7 @@ stages:
   variables:
     containerAppName: 'fransync-bridging'
     resourceGroupName: 'prod-fransync-rg'
-    version: $[ stageDependencies.BuildAndTest.Build.outputs['setVersionVars.Version'] ]
+    version: $[ stageDependencies.BuildAndTest.Build.outputs['setVersionVars.CustomVersion'] ]
     containerImage: '$(containerRegistry)/$(imageName):$(version)'
   jobs:
   - deployment: DeployToProduction
