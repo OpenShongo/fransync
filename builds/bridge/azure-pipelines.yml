@@ -7,8 +7,8 @@ pool:
 variables:
   buildConfiguration: 'Release'
   dotnetVersion: '9.0.x'
-  containerRegistry: 'shongo.azurecr.io' # Replace with your Azure Container Registry
-  imageName: 'fransync-bridge'
+  containerRegistry: 'shongo.azurecr.io'
+  imageName: 'fransync-bridging'
 
 stages:
 - stage: BuildAndTest
@@ -23,6 +23,29 @@ stages:
         packageType: 'sdk'
         version: $(dotnetVersion)
 
+    - task: gitversion/setup@0
+      displayName: 'Install GitVersion'
+      inputs:
+        versionSpec: '5.x'
+
+    - task: gitversion/execute@0
+      displayName: 'Determine Version'
+      inputs:
+        useConfigFile: true
+        configFilePath: 'GitVersion.yml'
+
+    - script: |
+        echo "##vso[task.setvariable variable=Version;isOutput=true]$(GitVersion.SemVer)"
+        echo "##vso[task.setvariable variable=AssemblyVersion;isOutput=true]$(GitVersion.AssemblySemVer)"
+        echo "##vso[task.setvariable variable=FileVersion;isOutput=true]$(GitVersion.AssemblySemFileVer)"
+        echo "##vso[task.setvariable variable=InformationalVersion;isOutput=true]$(GitVersion.InformationalVersion)"
+        echo "Version: $(GitVersion.SemVer)"
+        echo "Assembly Version: $(GitVersion.AssemblySemVer)"
+        echo "File Version: $(GitVersion.AssemblySemFileVer)"
+        echo "Informational Version: $(GitVersion.InformationalVersion)"
+      displayName: 'Set Version Variables'
+      name: setVersionVars
+
     - task: DotNetCoreCLI@2
       displayName: 'Restore packages'
       inputs:
@@ -34,7 +57,7 @@ stages:
       inputs:
         command: 'build'
         projects: '**/*.csproj'
-        arguments: '--configuration $(buildConfiguration) --no-restore'
+        arguments: '--configuration $(buildConfiguration) --no-restore /p:Version=$(GitVersion.SemVer) /p:AssemblyVersion=$(GitVersion.AssemblySemVer) /p:FileVersion=$(GitVersion.AssemblySemFileVer) /p:InformationalVersion=$(GitVersion.InformationalVersion)'
 
     - task: DotNetCoreCLI@2
       displayName: 'Run tests'
@@ -52,17 +75,20 @@ stages:
         dockerfile: 'src/Fransync.Bridging.WebService/Dockerfile'
         buildContext: '.'
         tags: |
-          $(Build.BuildId)
+          $(GitVersion.SemVer)
+          $(GitVersion.MajorMinorPatch)
           latest
+        arguments: '--build-arg VERSION=$(GitVersion.SemVer)'
 
     - task: Docker@2
       displayName: 'Push Docker Image to ACR'
       inputs:
         command: 'push'
         repository: $(imageName)
-        containerRegistry: 'shongo-azure-registry' # Replace with your ACR service connection
+        containerRegistry: 'shongo-azure-registry'
         tags: |
-          $(Build.BuildId)
+          $(GitVersion.SemVer)
+          $(GitVersion.MajorMinorPatch)
           latest
 
 - stage: Production
@@ -70,10 +96,11 @@ stages:
   dependsOn: BuildAndTest
   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
   variables:
-    azureSubscription: 'your-azure-service-connection' # Replace with your service connection name
-    containerAppName: 'fransync-bridge-prod' # Replace with your container app name
-    resourceGroupName: 'fransync-rg' # Replace with your resource group name
-    containerImage: '$(containerRegistry)/$(imageName):$(Build.BuildId)'
+    azureSubscription: 'prod-fransync-bridging'
+    containerAppName: 'fransync-bridging'
+    resourceGroupName: 'prod-fransync-rg'
+    version: $[ stageDependencies.BuildAndTest.Build.outputs['setVersionVars.Version'] ]
+    containerImage: '$(containerRegistry)/$(imageName):$(version)'
   jobs:
   - deployment: DeployToProduction
     displayName: 'Deploy Container to Production'
@@ -82,14 +109,14 @@ stages:
       runOnce:
         deploy:
           steps:
-          - task: AzureContainerApps@1
-            displayName: 'Deploy to Azure Container Apps'
+          - task: AzureWebAppContainer@1
+            displayName: 'Deploy to Azure App Service'
             inputs:
               azureSubscription: $(azureSubscription)
-              containerAppName: $(containerAppName)
-              resourceGroup: $(resourceGroupName)
-              imageToDeploy: $(containerImage)
-              targetPort: '8080'
-              environmentVariables: |
-                ASPNETCORE_ENVIRONMENT=Production
-                ASPNETCORE_URLS=http://+:8080
+              appName: $(containerAppName)
+              resourceGroupName: $(resourceGroupName)
+              imageName: $(containerImage)
+              appSettings: |
+                -ASPNETCORE_ENVIRONMENT Production
+                -ASPNETCORE_URLS http://+:8080
+                -VERSION $(version)

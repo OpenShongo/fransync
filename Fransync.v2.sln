@@ -13,12 +13,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution items", "Solution 
 	ProjectSection(SolutionItems) = preProject
 		.dockerignore = .dockerignore
 		.gitignore = .gitignore
+		GitVersion.yml = GitVersion.yml
 		README.md = README.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Builds", "Builds", "{CC8973FD-0C63-4C07-BBF4-42829E795287}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "bridge", "bridge", "{768AC57A-0079-48BF-BAC4-E79B7F80EB5D}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "bridging", "bridging", "{768AC57A-0079-48BF-BAC4-E79B7F80EB5D}"
 	ProjectSection(SolutionItems) = preProject
 		builds\bridge\azure-pipelines.yml = builds\bridge\azure-pipelines.yml
 	EndProjectSection
