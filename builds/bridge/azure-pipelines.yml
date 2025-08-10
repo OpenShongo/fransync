@@ -129,5 +129,5 @@ stages:
               azureSubscription: 'prod-fransync-subscription'
               appName: $(containerAppName)
               resourceGroupName: $(resourceGroupName)
-              imageName: $(containerImage)
+              containers: $(containerImage)
               appSettings: '-ASPNETCORE_ENVIRONMENT Production -ASPNETCORE_URLS http://+:8080 -VERSION $(version)'
