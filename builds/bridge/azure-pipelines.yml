@@ -4,11 +4,92 @@ trigger:
 pool:
   vmImage: ubuntu-latest
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+variables:
+  buildConfiguration: 'Release'
+  dotnetVersion: '9.0.x'
+  containerRegistry: 'shongo.azurecr.io' # Replace with your Azure Container Registry
+  imageName: 'fransync-bridge'
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-    displayName: 'Run a multi-line script
+stages:
+- stage: BuildAndTest
+  displayName: 'Build and Test'
+  jobs:
+  - job: Build
+    displayName: 'Build .NET Projects and Docker Image'
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Use .NET 9'
+      inputs:
+        packageType: 'sdk'
+        version: $(dotnetVersion)
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore packages'
+      inputs:
+        command: 'restore'
+        projects: '**/*.csproj'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build solution'
+      inputs:
+        command: 'build'
+        projects: '**/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-restore'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Run tests'
+      inputs:
+        command: 'test'
+        projects: '**/*Tests.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage"'
+      continueOnError: true
+
+    - task: Docker@2
+      displayName: 'Build Docker Image'
+      inputs:
+        command: 'build'
+        repository: $(imageName)
+        dockerfile: 'src/Fransync.Bridging.WebService/Dockerfile'
+        buildContext: '.'
+        tags: |
+          $(Build.BuildId)
+          latest
+
+    - task: Docker@2
+      displayName: 'Push Docker Image to ACR'
+      inputs:
+        command: 'push'
+        repository: $(imageName)
+        containerRegistry: 'shongo-azure-registry' # Replace with your ACR service connection
+        tags: |
+          $(Build.BuildId)
+          latest
+
+- stage: Production
+  displayName: 'Deploy to Production'
+  dependsOn: BuildAndTest
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  variables:
+    azureSubscription: 'your-azure-service-connection' # Replace with your service connection name
+    containerAppName: 'fransync-bridge-prod' # Replace with your container app name
+    resourceGroupName: 'fransync-rg' # Replace with your resource group name
+    containerImage: '$(containerRegistry)/$(imageName):$(Build.BuildId)'
+  jobs:
+  - deployment: DeployToProduction
+    displayName: 'Deploy Container to Production'
+    environment: 'Production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureContainerApps@1
+            displayName: 'Deploy to Azure Container Apps'
+            inputs:
+              azureSubscription: $(azureSubscription)
+              containerAppName: $(containerAppName)
+              resourceGroup: $(resourceGroupName)
+              imageToDeploy: $(containerImage)
+              targetPort: '8080'
+              environmentVariables: |
+                ASPNETCORE_ENVIRONMENT=Production
+                ASPNETCORE_URLS=http://+:8080
