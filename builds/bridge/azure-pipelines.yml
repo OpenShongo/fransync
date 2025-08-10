@@ -130,7 +130,4 @@ stages:
               appName: $(containerAppName)
               resourceGroupName: $(resourceGroupName)
               imageName: $(containerImage)
-              appSettings: |
-                -ASPNETCORE_ENVIRONMENT Production
-                -ASPNETCORE_URLS http://+:8080
-                -VERSION $(version)
+              appSettings: '-ASPNETCORE_ENVIRONMENT Production -ASPNETCORE_URLS http://+:8080 -VERSION $(version)'
