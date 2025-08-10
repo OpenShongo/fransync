@@ -7,7 +7,7 @@ pool:
 variables:
   buildConfiguration: 'Release'
   dotnetVersion: '9.0.x'
-  containerRegistry: 'shongo.azurecr.io'
+  containerRegistry: 'shongo'
   imageName: 'fransync-bridging'
 
 stages:
