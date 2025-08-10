@@ -1,17 +1,13 @@
-mode: ManualDeployment
+mode: ContinuousDeployment
 branches:
-  master:
+  main:
+    regex: ^master$|^main$
+    mode: ContinuousDeployment
     tag: ''
     increment: Patch
-  release:
-    regex: ^releases?[/-]
-    tag: rc
-  feature:
-    regex: ^features?[/-]
-    tag: alpha-{BranchName}
-  hotfix:
-    regex: ^hotfix(es)?[/-]
-    tag: rc
-  develop:
-    regex: ^dev(elop)?(ment)?$
-    tag: beta
+    prevent-increment-of-merged-branch-version: true
+    track-merge-target: false
+    source-branches: []
+ignore:
+  sha: []
+merge-message-formats: {}
