@@ -91,7 +91,7 @@ stages:
   dependsOn: BuildAndTest
   condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
   variables:
-    azureSubscription: 'production'
+    azureSubscription: 'prod-fransync-subscription'
     containerAppName: 'fransync-bridging'
     resourceGroupName: 'prod-fransync-rg'
     version: $[ stageDependencies.BuildAndTest.Build.outputs['setVersionVars.Version'] ]
