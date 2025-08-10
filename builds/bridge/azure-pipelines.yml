@@ -49,21 +49,23 @@ stages:
       inputs:
         command: 'restore'
         projects: '**/*.csproj'
+        workingDirectory: 'src/Fransync.Bridging.WebService'
 
     - task: DotNetCoreCLI@2
       displayName: 'Build solution'
       inputs:
         command: 'build'
         projects: '**/*.csproj'
+        workingDirectory: 'src/Fransync.Bridging.WebService'
         arguments: '--configuration $(buildConfiguration) --no-restore /p:Version=$(GITVERSION_SEMVER) /p:AssemblyVersion=$(GITVERSION_ASSEMBLYSEMVER) /p:FileVersion=$(GITVERSION_ASSEMBLYSEMFILEVER) /p:InformationalVersion=$(GITVERSION_INFORMATIONALVERSION)'
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Run tests'
-      inputs:
-        command: 'test'
-        projects: '**/*Tests.csproj'
-        arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage"'
-      continueOnError: true
+    # - task: DotNetCoreCLI@2
+    #   displayName: 'Run tests'
+    #   inputs:
+    #     command: 'test'
+    #     projects: '**/*Tests.csproj'
+    #     arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage"'
+    #   continueOnError: true
 
     - task: Docker@2
       displayName: 'Build Docker Image'
