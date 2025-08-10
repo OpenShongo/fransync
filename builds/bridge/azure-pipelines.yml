@@ -17,6 +17,7 @@ stages:
   - job: Build
     displayName: 'Build .NET Projects and Docker Image'
     steps:
+    - checkout: self
     - task: UseDotNet@2
       displayName: 'Use .NET 9'
       inputs:
