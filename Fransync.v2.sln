@@ -19,8 +19,11 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Builds", "Builds", "{CC8973FD-0C63-4C07-BBF4-42829E795287}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "bridge", "bridge", "{768AC57A-0079-48BF-BAC4-E79B7F80EB5D}"
+	ProjectSection(SolutionItems) = preProject
+		builds\bridge\azure-pipelines.yml = builds\bridge\azure-pipelines.yml
+	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "NewFolder1", "NewFolder1", "{290E70D1-2EEC-43BC-B1E6-AFEC35954E47}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "client", "client", "{290E70D1-2EEC-43BC-B1E6-AFEC35954E47}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
