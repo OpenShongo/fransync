@@ -97,21 +97,11 @@ stages:
     - task: Docker@2
       displayName: 'Build Docker Image'
       inputs:
-        command: 'build'
+        command: 'buildAndPush'
         repository: '$(containerRegistry)/$(imageName)'
         dockerfile: 'src/Fransync.Bridging.WebService/Dockerfile'
-        buildContext: '.'
-        tags: |
-          $(GitVersionCustomVersion)
-          latest
-        arguments: '--build-arg VERSION=$(GitVersionCustomVersion)'
-
-    - task: Docker@2
-      displayName: 'Push Docker Image to ACR'
-      inputs:
-        command: 'push'
-        repository: '$(containerRegistry)/$(imageName)'
         containerRegistry: 'shongo-azure-registry'
+        buildContext: '.'
         tags: |
           $(GitVersionCustomVersion)
           latest
