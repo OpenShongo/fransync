@@ -29,19 +29,27 @@ stages:
     - script: |
         dotnet tool install --global GitVersion.Tool --version 5.12.0
         dotnet-gitversion /output buildserver
-      displayName: 'Install and Run GitVersion'
-
-    - script: |
+        
+        # Set pipeline variables for immediate use
+        echo "##vso[task.setvariable variable=GitVersionSemVer]$GITVERSION_SEMVER"
+        echo "##vso[task.setvariable variable=GitVersionAssemblySemVer]$GITVERSION_ASSEMBLYSEMVER"
+        echo "##vso[task.setvariable variable=GitVersionAssemblySemFileVer]$GITVERSION_ASSEMBLYSEMFILEVER"
+        echo "##vso[task.setvariable variable=GitVersionInformationalVersion]$GITVERSION_INFORMATIONALVERSION"
+        echo "##vso[task.setvariable variable=GitVersionMajorMinorPatch]$GITVERSION_MAJORMINORPATCH"
+        
+        # Set output variables for later stages
         echo "##vso[task.setvariable variable=Version;isOutput=true]$GITVERSION_SEMVER"
         echo "##vso[task.setvariable variable=AssemblyVersion;isOutput=true]$GITVERSION_ASSEMBLYSEMVER"
         echo "##vso[task.setvariable variable=FileVersion;isOutput=true]$GITVERSION_ASSEMBLYSEMFILEVER"
         echo "##vso[task.setvariable variable=InformationalVersion;isOutput=true]$GITVERSION_INFORMATIONALVERSION"
+        
+        # Display the versions for debugging
         echo "Version: $GITVERSION_SEMVER"
         echo "Assembly Version: $GITVERSION_ASSEMBLYSEMVER"
         echo "File Version: $GITVERSION_ASSEMBLYSEMFILEVER"
         echo "Informational Version: $GITVERSION_INFORMATIONALVERSION"
         echo "Major.Minor.Patch: $GITVERSION_MAJORMINORPATCH"
-      displayName: 'Set Version Variables'
+      displayName: 'Install and Run GitVersion'
       name: setVersionVars
 
     - task: DotNetCoreCLI@2
@@ -57,7 +65,7 @@ stages:
         command: 'build'
         projects: '**/*.csproj'
         workingDirectory: 'src/Fransync.Bridging.WebService'
-        arguments: '--configuration $(buildConfiguration) --no-restore /p:Version=$(GITVERSION_SEMVER) /p:AssemblyVersion=$(GITVERSION_ASSEMBLYSEMVER) /p:FileVersion=$(GITVERSION_ASSEMBLYSEMFILEVER) /p:InformationalVersion=$(GITVERSION_INFORMATIONALVERSION)'
+        arguments: '--configuration $(buildConfiguration) --no-restore /p:Version=$(GitVersionSemVer) /p:AssemblyVersion=$(GitVersionAssemblySemVer) /p:FileVersion=$(GitVersionAssemblySemFileVer) /p:InformationalVersion=$(GitVersionInformationalVersion)'
 
     # - task: DotNetCoreCLI@2
     #   displayName: 'Run tests'
@@ -75,10 +83,10 @@ stages:
         dockerfile: 'src/Fransync.Bridging.WebService/Dockerfile'
         buildContext: '.'
         tags: |
-          $(GITVERSION_SEMVER)
-          $(GITVERSION_MAJORMINORPATCH)
+          $(GitVersionSemVer)
+          $(GitVersionMajorMinorPatch)
           latest
-        arguments: '--build-arg VERSION=$(GITVERSION_SEMVER)'
+        arguments: '--build-arg VERSION=$(GitVersionSemVer)'
 
     - task: Docker@2
       displayName: 'Push Docker Image to ACR'
@@ -87,8 +95,8 @@ stages:
         repository: $(imageName)
         containerRegistry: 'shongo-azure-registry'
         tags: |
-          $(GITVERSION_SEMVER)
-          $(GITVERSION_MAJORMINORPATCH)
+          $(GitVersionSemVer)
+          $(GitVersionMajorMinorPatch)
           latest
 
 - stage: Production
