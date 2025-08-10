@@ -28,27 +28,38 @@ stages:
 
     - script: |
         dotnet tool install --global GitVersion.Tool --version 5.12.0
-        dotnet-gitversion /output buildserver
+        
+        # Run GitVersion and capture output as JSON
+        GITVERSION_OUTPUT=$(dotnet-gitversion /output json)
+        echo "GitVersion JSON Output:"
+        echo "$GITVERSION_OUTPUT"
+        
+        # Parse JSON and extract version values
+        SEMVER=$(echo "$GITVERSION_OUTPUT" | jq -r '.SemVer')
+        ASSEMBLY_VER=$(echo "$GITVERSION_OUTPUT" | jq -r '.AssemblySemVer')
+        FILE_VER=$(echo "$GITVERSION_OUTPUT" | jq -r '.AssemblySemFileVer')
+        INFO_VER=$(echo "$GITVERSION_OUTPUT" | jq -r '.InformationalVersion')
+        MAJOR_MINOR_PATCH=$(echo "$GITVERSION_OUTPUT" | jq -r '.MajorMinorPatch')
         
         # Set pipeline variables for immediate use
-        echo "##vso[task.setvariable variable=GitVersionSemVer]$GITVERSION_SEMVER"
-        echo "##vso[task.setvariable variable=GitVersionAssemblySemVer]$GITVERSION_ASSEMBLYSEMVER"
-        echo "##vso[task.setvariable variable=GitVersionAssemblySemFileVer]$GITVERSION_ASSEMBLYSEMFILEVER"
-        echo "##vso[task.setvariable variable=GitVersionInformationalVersion]$GITVERSION_INFORMATIONALVERSION"
-        echo "##vso[task.setvariable variable=GitVersionMajorMinorPatch]$GITVERSION_MAJORMINORPATCH"
+        echo "##vso[task.setvariable variable=GitVersionSemVer]$SEMVER"
+        echo "##vso[task.setvariable variable=GitVersionAssemblySemVer]$ASSEMBLY_VER"
+        echo "##vso[task.setvariable variable=GitVersionAssemblySemFileVer]$FILE_VER"
+        echo "##vso[task.setvariable variable=GitVersionInformationalVersion]$INFO_VER"
+        echo "##vso[task.setvariable variable=GitVersionMajorMinorPatch]$MAJOR_MINOR_PATCH"
         
         # Set output variables for later stages
-        echo "##vso[task.setvariable variable=Version;isOutput=true]$GITVERSION_SEMVER"
-        echo "##vso[task.setvariable variable=AssemblyVersion;isOutput=true]$GITVERSION_ASSEMBLYSEMVER"
-        echo "##vso[task.setvariable variable=FileVersion;isOutput=true]$GITVERSION_ASSEMBLYSEMFILEVER"
-        echo "##vso[task.setvariable variable=InformationalVersion;isOutput=true]$GITVERSION_INFORMATIONALVERSION"
+        echo "##vso[task.setvariable variable=Version;isOutput=true]$SEMVER"
+        echo "##vso[task.setvariable variable=AssemblyVersion;isOutput=true]$ASSEMBLY_VER"
+        echo "##vso[task.setvariable variable=FileVersion;isOutput=true]$FILE_VER"
+        echo "##vso[task.setvariable variable=InformationalVersion;isOutput=true]$INFO_VER"
         
         # Display the versions for debugging
-        echo "Version: $GITVERSION_SEMVER"
-        echo "Assembly Version: $GITVERSION_ASSEMBLYSEMVER"
-        echo "File Version: $GITVERSION_ASSEMBLYSEMFILEVER"
-        echo "Informational Version: $GITVERSION_INFORMATIONALVERSION"
-        echo "Major.Minor.Patch: $GITVERSION_MAJORMINORPATCH"
+        echo "Version: $SEMVER"
+        echo "Assembly Version: $ASSEMBLY_VER"
+        echo "File Version: $FILE_VER"
+        echo "Informational Version: $INFO_VER"
+        echo "Major.Minor.Patch: $MAJOR_MINOR_PATCH"
       displayName: 'Install and Run GitVersion'
       name: setVersionVars
 
