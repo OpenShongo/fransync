@@ -1,5 +1,8 @@
 mode: ContinuousDeployment
 branches:
+  main:
+    tag: ''
+    increment: Patch
   master:
     tag: ''
     increment: Patch
