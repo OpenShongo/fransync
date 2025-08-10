@@ -107,7 +107,7 @@ stages:
           - task: AzureWebAppContainer@1
             displayName: 'Deploy to Azure App Service'
             inputs:
-              azureSubscription: $(azureSubscription)
+              azureSubscription: 'prod-fransync-subscription'
               appName: $(containerAppName)
               resourceGroupName: $(resourceGroupName)
               imageName: $(containerImage)
