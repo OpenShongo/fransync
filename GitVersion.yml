@@ -7,7 +7,7 @@ branches:
     increment: Patch
     prevent-increment-of-merged-branch-version: true
     track-merge-target: false
-    source-branches: ['develop', 'feature', 'release', 'fix', 'hotfix']
+    source-branches: ['develop', 'feature', 'release', 'hotfix']
   develop:
     regex: ^dev(elop)?(ment)?$
     mode: ContinuousDeployment
@@ -23,7 +23,7 @@ branches:
     increment: Minor
     prevent-increment-of-merged-branch-version: false
     track-merge-target: false
-    source-branches: ['develop', 'main', 'release', 'feature', 'fix', 'hotfix']
+    source-branches: ['develop', 'main', 'release', 'hotfix']
   release:
     regex: ^releases?[/-]
     mode: ContinuousDeployment
@@ -31,7 +31,7 @@ branches:
     increment: Patch
     prevent-increment-of-merged-branch-version: true
     track-merge-target: false
-    source-branches: ['develop', 'main', 'feature', 'fix', 'hotfix']
+    source-branches: ['develop', 'main', 'feature', 'hotfix']
   hotfix:
     regex: ^hotfix(es)?[/-]
     mode: ContinuousDeployment
@@ -39,7 +39,7 @@ branches:
     increment: Patch
     prevent-increment-of-merged-branch-version: false
     track-merge-target: false
-    source-branches: ['release', 'main', 'fix', 'hotfix']
+    source-branches: ['release', 'main', 'hotfix']
 ignore:
   sha: []
 merge-message-formats: {}
