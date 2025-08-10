@@ -18,6 +18,8 @@ stages:
     displayName: 'Build .NET Projects and Docker Image'
     steps:
     - checkout: self
+      fetchDepth: 0
+
     - task: UseDotNet@2
       displayName: 'Use .NET 9'
       inputs:
