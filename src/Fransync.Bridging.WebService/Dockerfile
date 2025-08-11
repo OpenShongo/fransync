@@ -12,7 +12,7 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["Fransync.Bridging.WebService.csproj", "."]
+COPY ["src/Fransync.Bridging.WebService.csproj", "."]
 RUN dotnet restore "./Fransync.Bridging.WebService.csproj"
 COPY . .
 WORKDIR "/src/."
