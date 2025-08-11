@@ -99,7 +99,8 @@ stages:
       inputs:
         command: 'buildAndPush'
         repository: '$(imageName)'
-        dockerfile: 'src/Fransync.Bridging.WebService/Dockerfile'
+        dockerfile: 'Dockerfile'
+        workingDirectory: 'src/Fransync.Bridging.WebService'
         containerRegistry: 'shongo-azure-registry'
         buildContext: '.'
         tags: |
