@@ -5,10 +5,15 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  buildConfiguration: 'Release'
-  dotnetVersion: '9.0.x'
-  containerRegistry: 'shongo.azurecr.io'
-  imageName: 'fransync-bridging'
+- group: 'GLOBAL-FRANSYNC-SECURED'
+- name: buildConfiguration
+  value: 'Release'
+- name: dotnetVersion
+  value: '9.0.x'
+- name: containerRegistry
+  value: 'shongo.azurecr.io'
+- name: imageName
+  value: 'fransync-bridging'
 
 stages:
 - stage: BuildAndTest
@@ -134,7 +139,28 @@ stages:
                 az webapp config appsettings set \
                   --name $(containerAppName) \
                   --resource-group $(resourceGroupName) \
-                  --settings WEBSITES_PORT=8081
+                  --settings WEBSITES_PORT=8080
+
+          - task: AzureCLI@2
+            displayName: 'Configure ACR Authentication'
+            inputs:
+              azureSubscription: 'prod-fransync-subscription'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Use secured library variables from Key Vault
+                echo "Configuring ACR authentication using secured library variables"
+                echo "ACR Username: $(acr-username)"
+                echo "Using password from secured library"
+                
+                # Configure App Service with ACR credentials from Key Vault
+                az webapp config container set \
+                  --name $(containerAppName) \
+                  --resource-group $(resourceGroupName) \
+                  --docker-custom-image-name $(containerImage) \
+                  --docker-registry-server-url https://shongo.azurecr.io \
+                  --docker-registry-server-user "$(acr-username)" \
+                  --docker-registry-server-password "$(acr-password)"
 
           - task: AzureWebAppContainer@1
             displayName: 'Deploy to Azure App Service'
@@ -143,4 +169,4 @@ stages:
               appName: $(containerAppName)
               resourceGroupName: $(resourceGroupName)
               imageName: $(containerImage)
-              appSettings: '-ASPNETCORE_ENVIRONMENT Production -ASPNETCORE_URLS http://+:8081 -VERSION $(version)'
+              appSettings: '-ASPNETCORE_ENVIRONMENT Production -ASPNETCORE_URLS http://+:8080 -VERSION $(version)'
