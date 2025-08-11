@@ -35,17 +35,17 @@ RUN chown -R appuser:appuser /app
 USER appuser
 
 # Configure ASP.NET Core
-ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_URLS=http://+:8081
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV DOTNET_RUNNING_IN_CONTAINER=true
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=true
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:8081/health || exit 1
 
 # Expose port
-EXPOSE 8080
+EXPOSE 8081
 
 # Entry point
 ENTRYPOINT ["dotnet", "Fransync.Bridging.WebService.dll"]

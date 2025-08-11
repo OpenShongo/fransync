@@ -123,11 +123,24 @@ stages:
       runOnce:
         deploy:
           steps:
+          - task: AzureCLI@2
+            displayName: 'Configure App Service Port'
+            inputs:
+              azureSubscription: 'prod-fransync-subscription'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Set the correct port for App Service to route to
+                az webapp config appsettings set \
+                  --name $(containerAppName) \
+                  --resource-group $(resourceGroupName) \
+                  --settings WEBSITES_PORT=8081
+
           - task: AzureWebAppContainer@1
             displayName: 'Deploy to Azure App Service'
             inputs:
               azureSubscription: 'prod-fransync-subscription'
               appName: $(containerAppName)
               resourceGroupName: $(resourceGroupName)
-              containers: $(containerImage)
-              appSettings: '-ASPNETCORE_ENVIRONMENT Production -ASPNETCORE_URLS http://+:8080 -VERSION $(version)'
+              imageName: $(containerImage)
+              appSettings: '-ASPNETCORE_ENVIRONMENT Production -ASPNETCORE_URLS http://+:8081 -VERSION $(version)'
