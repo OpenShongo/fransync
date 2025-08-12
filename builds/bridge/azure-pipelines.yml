@@ -101,7 +101,7 @@ stages:
       displayName: 'Publish test results'
       inputs:
         testResultsFormat: 'VSTest'
-        testResultsFiles: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+        testResultsFiles: '$(Agent.TempDirectory)/**/*.trx'
         mergeTestResults: true
         failTaskOnFailedTests: false
       condition: always()
