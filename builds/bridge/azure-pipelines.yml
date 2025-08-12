@@ -93,7 +93,7 @@ stages:
       displayName: 'Run tests'
       inputs:
         command: 'test'
-        projects: 'tests/**/*Tests.csproj'
+        projects: '**/*.Tests.csproj'
         arguments: '--configuration $(buildConfiguration) --collect:"XPlat Code Coverage" --logger:trx --results-directory $(Agent.TempDirectory)'
       continueOnError: true
 

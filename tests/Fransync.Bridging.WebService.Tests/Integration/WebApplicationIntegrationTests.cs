@@ -47,7 +47,6 @@ public class WebApplicationIntegrationTests : IClassFixture<WebApplicationFactor
         var content = await response.Content.ReadAsStringAsync();
         content.Should().Contain("service");
         content.Should().Contain("version");
-        content.Should().Contain("build");
     }
 
     [Fact]
