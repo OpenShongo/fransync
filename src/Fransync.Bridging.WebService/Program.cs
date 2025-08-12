@@ -1,6 +1,7 @@
 
 using Fransync.Bridging.WebService.Middleware;
 using Fransync.Bridging.WebService.Services;
+using System.Reflection;
 using System.Text.Json;
 using WebSocketManager = Fransync.Bridging.WebService.Services.WebSocketManager;
 
@@ -52,6 +53,36 @@ public class Program
             timestamp = DateTime.UtcNow,
             service = "Fransync.Bridging.WebService"
         }));
+
+        // Dedicated version endpoint - comprehensive version information
+        app.MapGet("/version", () =>
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            var version = assembly.GetName().Version?.ToString() ?? "unknown";
+            var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? version;
+            var pipelineVersion = Environment.GetEnvironmentVariable("VERSION");
+            var buildDate = assembly.GetCustomAttribute<AssemblyMetadataAttribute>("BuildDate")?.Value;
+
+            return Results.Ok(new
+            {
+                service = "Fransync.Bridging.WebService",
+                version = new
+                {
+                    assembly = version,
+                    informational = informationalVersion,
+                    pipeline = pipelineVersion ?? "unknown",
+                    display = pipelineVersion ?? informationalVersion
+                },
+                build = new
+                {
+                    date = buildDate ?? "unknown",
+                    environment = app.Environment.EnvironmentName,
+                    framework = Environment.Version.ToString(),
+                    dotnetVersion = Environment.GetEnvironmentVariable("DOTNET_VERSION") ?? "unknown"
+                },
+                timestamp = DateTime.UtcNow
+            });
+        });
 
         app.Run();
     }

@@ -7,6 +7,7 @@ EXPOSE 8081
 
 # This stage is used to build the service project
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+ARG VERSION=1.0.0
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
@@ -23,8 +24,10 @@ RUN dotnet build "Fransync.Bridging.WebService.csproj" -c $BUILD_CONFIGURATION -
 
 # This stage is used to publish the service project to be copied to the final stage
 FROM build AS publish
-ARG BUILD_CONFIGURATION=$BUILD_CONFIGURATION
-RUN dotnet publish "Fransync.Bridging.WebService.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+ARG BUILD_CONFIGURATION=Release
+ARG VERSION=1.0.0
+RUN dotnet publish "Fransync.Bridging.WebService.csproj" -c $BUILD_CONFIGURATION -o /app/publish \
+	/p:UseAppHost=false \
 	/p:Version=${VERSION} \
 	/p:InformationalVersion=${VERSION}
 
