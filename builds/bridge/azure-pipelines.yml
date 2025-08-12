@@ -94,14 +94,14 @@ stages:
       inputs:
         command: 'test'
         projects: '**/*.Tests.csproj'
-        arguments: '--configuration $(buildConfiguration)'
+        arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage"'
       continueOnError: true
 
     - task: PublishTestResults@2
       displayName: 'Publish test results'
       inputs:
         testResultsFormat: 'VSTest'
-        testResultsFiles: '$(Agent.TempDirectory)/**/*.trx'
+        testResultsFiles: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
         mergeTestResults: true
         failTaskOnFailedTests: false
       condition: always()
