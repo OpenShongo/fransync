@@ -77,30 +77,31 @@ stages:
       name: setVersionVars
 
     - task: DotNetCoreCLI@2
-      displayName: 'Restore packages'
+      displayName: 'Run tests'
       inputs:
-        command: 'restore'
-        projects: '**/*.csproj'
-        workingDirectory: 'src/Fransync.Bridging.WebService'
+        command: 'test'
+        projects: 'tests/**/*Tests.csproj'
+        arguments: '--configuration $(buildConfiguration) --collect:"XPlat Code Coverage" --logger:trx --results-directory $(Agent.TempDirectory)'
+      continueOnError: true
 
-    - task: DotNetCoreCLI@2
-      displayName: 'Build solution'
+    - task: PublishTestResults@2
+      displayName: 'Publish test results'
       inputs:
-        command: 'build'
-        projects: '**/*.csproj'
-        workingDirectory: 'src/Fransync.Bridging.WebService'
-        arguments: '--configuration $(buildConfiguration) --no-restore /p:Version=$(GitVersionSemVer) /p:AssemblyVersion=$(GitVersionAssemblySemVer) /p:FileVersion=$(GitVersionAssemblySemFileVer) /p:InformationalVersion=$(GitVersionInformationalVersion)'
+        testResultsFormat: 'VSTest'
+        testResultsFiles: '$(Agent.TempDirectory)/**/*.trx'
+        mergeTestResults: true
+        failTaskOnFailedTests: false
+      condition: always()
 
-    # - task: DotNetCoreCLI@2
-    #   displayName: 'Run tests'
-    #   inputs:
-    #     command: 'test'
-    #     projects: '**/*Tests.csproj'
-    #     arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage"'
-    #   continueOnError: true
+    - task: PublishCodeCoverageResults@2
+      displayName: 'Publish code coverage'
+      inputs:
+        summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+        codeCoverageVersion: 'V2'
+      condition: always()
 
     - task: Docker@2
-      displayName: 'Build Docker Image'
+      displayName: 'Build and Push Docker Image'
       inputs:
         command: 'buildAndPush'
         repository: '$(imageName)'
@@ -110,6 +111,7 @@ stages:
         tags: |
           $(GitVersionCustomVersion)
           latest
+        arguments: '--build-arg VERSION=$(GitVersionCustomVersion)'
 
 - stage: Production
   displayName: 'Deploy to Production'

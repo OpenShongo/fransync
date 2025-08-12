@@ -61,7 +61,6 @@ public class Program
             var version = assembly.GetName().Version?.ToString() ?? "unknown";
             var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? version;
             var pipelineVersion = Environment.GetEnvironmentVariable("VERSION");
-            var buildDate = assembly.GetCustomAttribute<AssemblyMetadataAttribute>("BuildDate")?.Value;
 
             return Results.Ok(new
             {
@@ -75,7 +74,6 @@ public class Program
                 },
                 build = new
                 {
-                    date = buildDate ?? "unknown",
                     environment = app.Environment.EnvironmentName,
                     framework = Environment.Version.ToString(),
                     dotnetVersion = Environment.GetEnvironmentVariable("DOTNET_VERSION") ?? "unknown"
