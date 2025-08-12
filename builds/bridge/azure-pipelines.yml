@@ -77,11 +77,26 @@ stages:
       name: setVersionVars
 
     - task: DotNetCoreCLI@2
+      displayName: 'Restore solution'
+      inputs:
+        command: 'restore'
+        projects: '**/*.sln'
+        # If no .sln file, use: projects: '**/*.csproj'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build solution'
+      inputs:
+        command: 'build'
+        projects: '**/*.sln'
+        # If no .sln file, use: projects: '**/*.csproj'
+        arguments: '--configuration $(buildConfiguration) --no-restore'
+
+    - task: DotNetCoreCLI@2
       displayName: 'Run tests'
       inputs:
         command: 'test'
         projects: 'tests/**/*Tests.csproj'
-        arguments: '--configuration $(buildConfiguration) --collect:"XPlat Code Coverage" --logger:trx --results-directory $(Agent.TempDirectory)'
+        arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage" --logger:trx --results-directory $(Agent.TempDirectory)'
       continueOnError: true
 
     - task: PublishTestResults@2
