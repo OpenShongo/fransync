@@ -7,6 +7,7 @@ public class InMemorySyncStore : ISyncStore
 {
     private readonly ConcurrentDictionary<string, FileManifest> _manifests = new();
     private readonly ConcurrentDictionary<string, byte[]> _blocks = new();
+    private readonly ConcurrentDictionary<string, HashSet<int>> _receivedBlocks = new();
     private DirectorySnapshot? _sourceDirectorySnapshot;
     private readonly ConcurrentDictionary<string, DateTime> _deletedFiles = new();
 
@@ -14,6 +15,9 @@ public class InMemorySyncStore : ISyncStore
     {
         var normalizedPath = NormalizePath(manifest.RelativePath);
         _manifests[normalizedPath] = manifest;
+
+        // Initialize block tracking for this file
+        _receivedBlocks[normalizedPath] = new HashSet<int>();
     }
 
     public void StoreBlock(BlockPayload payload)
@@ -21,6 +25,15 @@ public class InMemorySyncStore : ISyncStore
         var normalizedFileId = NormalizePath(payload.FileId);
         var key = $"{normalizedFileId}#{payload.BlockIndex}";
         _blocks[key] = Convert.FromBase64String(payload.Data);
+
+        // Track received blocks
+        _receivedBlocks.AddOrUpdate(normalizedFileId,
+            new HashSet<int> { payload.BlockIndex },
+            (_, existing) =>
+            {
+                existing.Add(payload.BlockIndex);
+                return existing;
+            });
     }
 
     public FileManifest? GetManifest(string relativePath)
@@ -43,6 +56,44 @@ public class InMemorySyncStore : ISyncStore
         return _manifests.Keys.ToList();
     }
 
+    public bool IsFileComplete(string relativePath)
+    {
+        var normalizedPath = NormalizePath(relativePath);
+
+        if (!_manifests.TryGetValue(normalizedPath, out var manifest))
+            return false;
+
+        if (!_receivedBlocks.TryGetValue(normalizedPath, out var receivedBlocks))
+            return false;
+
+        // Check if all expected blocks have been received
+        var expectedBlocks = manifest.Blocks.Select(b => b.Index).ToHashSet();
+        return expectedBlocks.SetEquals(receivedBlocks);
+    }
+
+    public int GetReceivedBlockCount(string relativePath)
+    {
+        var normalizedPath = NormalizePath(relativePath);
+        if (_receivedBlocks.TryGetValue(normalizedPath, out var receivedBlocks))
+        {
+            return receivedBlocks.Count;
+        }
+        return 0;
+    }
+
+    public bool HasAllBlocksReceived(string relativePath)
+    {
+        var normalizedPath = NormalizePath(relativePath);
+
+        if (!_manifests.TryGetValue(normalizedPath, out var manifest))
+            return false;
+
+        if (!_receivedBlocks.TryGetValue(normalizedPath, out var receivedBlocks))
+            return false;
+
+        return receivedBlocks.Count >= manifest.Blocks.Count;
+    }
+
     public bool DeleteManifest(string relativePath)
     {
         var normalizedPath = NormalizePath(relativePath);
@@ -56,6 +107,9 @@ public class InMemorySyncStore : ISyncStore
                 var blockKey = $"{normalizedPath}#{i}";
                 _blocks.TryRemove(blockKey, out _);
             }
+
+            // Remove block tracking
+            _receivedBlocks.TryRemove(normalizedPath, out _);
 
             // Mark as deleted (enhanced functionality from the second method)
             _deletedFiles[normalizedPath] = DateTime.UtcNow;
@@ -89,6 +143,12 @@ public class InMemorySyncStore : ISyncStore
             {
                 _blocks[newBlockKey] = blockData;
             }
+        }
+
+        // Move block tracking
+        if (_receivedBlocks.TryRemove(oldNormalizedPath, out var receivedBlocks))
+        {
+            _receivedBlocks[newNormalizedPath] = receivedBlocks;
         }
 
         return true;

@@ -36,6 +36,10 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
                     await HandleBlockReceived(wsMessage, cancellationToken);
                     break;
 
+                case "file_upload_complete":
+                    await HandleFileUploadComplete(wsMessage, cancellationToken);
+                    break;
+
                 case "file_operation":
                     await HandleFileOperation(wsMessage, cancellationToken);
                     break;
@@ -76,20 +80,21 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
 
             _pendingDownloads[manifestNotification.RelativePath] = pendingDownload;
 
-            // If there are no blocks expected (empty file), download immediately
+            // If there are no blocks expected (empty file), download will be triggered by file_upload_complete
             if (manifestNotification.BlockCount == 0)
             {
-                await TriggerDownload(manifestNotification.RelativePath, cancellationToken);
+                _logger.LogDebug("Empty file manifest received for {RelativePath}, waiting for completion notification",
+                    manifestNotification.RelativePath);
             }
             else
             {
-                // Set a timeout to download anyway if blocks don't arrive
-                _ = Task.Delay(TimeSpan.FromSeconds(30), cancellationToken).ContinueWith(async _ =>
+                // Set a longer timeout to download anyway if completion notification doesn't arrive
+                _ = Task.Delay(TimeSpan.FromSeconds(60), cancellationToken).ContinueWith(async _ =>
                 {
                     if (_pendingDownloads.TryGetValue(manifestNotification.RelativePath, out var pending) &&
                         !pending.DownloadTriggered)
                     {
-                        _logger.LogWarning("Timeout waiting for all blocks for {RelativePath}, downloading anyway ({ReceivedBlocks}/{ExpectedBlocks} blocks)",
+                        _logger.LogWarning("Timeout waiting for upload completion for {RelativePath}, downloading anyway ({ReceivedBlocks}/{ExpectedBlocks} blocks)",
                             manifestNotification.RelativePath, pending.ReceivedBlocks.Count, pending.ExpectedBlockCount);
                         await TriggerDownload(manifestNotification.RelativePath, cancellationToken);
                     }
@@ -116,13 +121,24 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
                 _logger.LogDebug("Block progress for {FileId}: {ReceivedBlocks}/{ExpectedBlocks}",
                     blockNotification.FileId, pendingDownload.ReceivedBlocks.Count, pendingDownload.ExpectedBlockCount);
 
-                // Check if all blocks have been received
-                if (pendingDownload.ReceivedBlocks.Count >= pendingDownload.ExpectedBlockCount && !pendingDownload.DownloadTriggered)
-                {
-                    _logger.LogInformation("All blocks received for {FileId}, triggering download", blockNotification.FileId);
-                    await TriggerDownload(blockNotification.FileId, cancellationToken);
-                }
+                // Note: We no longer trigger download here directly, instead we wait for file_upload_complete
+                // This prevents the race condition more reliably
             }
+        }
+    }
+
+    private async Task HandleFileUploadComplete(WebSocketMessage message, CancellationToken cancellationToken)
+    {
+        var data = JsonSerializer.Serialize(message.Data);
+        var completionNotification = JsonSerializer.Deserialize<FileUploadCompleteNotification>(data);
+
+        if (completionNotification?.RelativePath != null)
+        {
+            _logger.LogInformation("File upload completed: {RelativePath} ({BlockCount} blocks)",
+                completionNotification.RelativePath, completionNotification.BlockCount);
+
+            // This is the definitive signal that all blocks are available
+            await TriggerDownload(completionNotification.RelativePath, cancellationToken);
         }
     }
 
@@ -130,10 +146,16 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
     {
         if (_pendingDownloads.TryGetValue(relativePath, out var pendingDownload))
         {
+            if (pendingDownload.DownloadTriggered)
+            {
+                _logger.LogDebug("Download already triggered for {RelativePath}", relativePath);
+                return;
+            }
+
             pendingDownload.DownloadTriggered = true;
 
             // Small delay to ensure all blocks are fully stored
-            await Task.Delay(100, cancellationToken);
+            await Task.Delay(150, cancellationToken);
 
             var success = await _downloadService.DownloadFileAsync(relativePath, cancellationToken);
 
@@ -144,10 +166,16 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
             else
             {
                 _logger.LogWarning("Failed to download {RelativePath}", relativePath);
+
+                // Mark as not triggered so retry mechanisms can work
+                pendingDownload.DownloadTriggered = false;
             }
 
-            // Clean up tracking
-            _pendingDownloads.TryRemove(relativePath, out _);
+            // Clean up tracking only on success
+            if (success)
+            {
+                _pendingDownloads.TryRemove(relativePath, out _);
+            }
         }
     }
 
@@ -162,6 +190,9 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
         {
             case FileOperationType.Deleted:
                 _logger.LogInformation("File deletion requested: {RelativePath}", fileOperation.RelativePath);
+
+                // Clean up any pending downloads for this file
+                _pendingDownloads.TryRemove(fileOperation.RelativePath, out _);
                 break;
 
             case FileOperationType.Renamed:
@@ -180,6 +211,9 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
 
         _logger.LogInformation("File rename requested: {OldPath} -> {NewPath}",
             operation.OldRelativePath, operation.RelativePath);
+
+        // Clean up pending downloads for old path
+        _pendingDownloads.TryRemove(operation.OldRelativePath, out _);
 
         var renamed = await _downloadService.RenameFileAsync(operation.OldRelativePath, operation.RelativePath, cancellationToken);
 

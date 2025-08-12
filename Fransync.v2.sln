@@ -14,6 +14,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution items", "Solution 
 		.dockerignore = .dockerignore
 		.gitignore = .gitignore
 		GitVersion.yml = GitVersion.yml
+		new-thread-prompt.txt = new-thread-prompt.txt
 		README.md = README.md
 	EndProjectSection
 EndProject

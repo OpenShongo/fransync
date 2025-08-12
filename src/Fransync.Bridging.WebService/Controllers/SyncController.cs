@@ -34,6 +34,26 @@ public class SyncController(ISyncStore store, IWebSocketManager wsManager) : Con
         };
 
         await wsManager.BroadcastToAllAsync(notification);
+
+        // If this is an empty file (no blocks), immediately notify completion
+        if (manifest.Blocks.Count == 0)
+        {
+            var completionNotification = new WebSocketMessage
+            {
+                Type = "file_upload_complete",
+                Data = new FileUploadCompleteNotification
+                {
+                    RelativePath = manifest.RelativePath,
+                    FileName = manifest.FileName,
+                    FileSize = manifest.FileSize,
+                    BlockCount = 0,
+                    CompletedAt = DateTime.UtcNow
+                }
+            };
+
+            await wsManager.BroadcastToAllAsync(completionNotification);
+        }
+
         return Ok();
     }
 
@@ -60,6 +80,32 @@ public class SyncController(ISyncStore store, IWebSocketManager wsManager) : Con
         };
 
         await wsManager.BroadcastToAllAsync(notification);
+
+        // Check if this completes the file upload
+        if (store.HasAllBlocksReceived(payload.FileId))
+        {
+            var manifest = store.GetManifest(payload.FileId);
+            if (manifest != null)
+            {
+                Console.WriteLine($"[FILE UPLOAD COMPLETE] {payload.FileId} | All {manifest.Blocks.Count} blocks received");
+
+                var completionNotification = new WebSocketMessage
+                {
+                    Type = "file_upload_complete",
+                    Data = new FileUploadCompleteNotification
+                    {
+                        RelativePath = manifest.RelativePath,
+                        FileName = manifest.FileName,
+                        FileSize = manifest.FileSize,
+                        BlockCount = manifest.Blocks.Count,
+                        CompletedAt = DateTime.UtcNow
+                    }
+                };
+
+                await wsManager.BroadcastToAllAsync(completionNotification);
+            }
+        }
+
         return Ok();
     }
 
@@ -211,10 +257,10 @@ public class SyncController(ISyncStore store, IWebSocketManager wsManager) : Con
                 Type = "directory_structure_updated",
                 Data = new
                 {
-                    TotalFiles = snapshot.TotalFiles,
-                    TotalSize = snapshot.TotalSize,
-                    DirectoryHash = snapshot.DirectoryHash,
-                    Timestamp = snapshot.Timestamp
+                    snapshot.TotalFiles,
+                    snapshot.TotalSize,
+                    snapshot.DirectoryHash,
+                    snapshot.Timestamp
                 }
             };
 

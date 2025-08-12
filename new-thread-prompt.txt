@@ -1,0 +1,354 @@
+# COMPREHENSIVE FRANSYNC FILE SYNCHRONIZATION SYSTEM PROMPT
+
+## PROJECT OVERVIEW
+
+**Fransync** is a sophisticated .NET 9 distributed file synchronization system designed for real-time, multi-client file synchronization across networks. The system employs a hub-and-spoke architecture with a central bridge server facilitating communication between multiple client instances.
+
+## ARCHITECTURE & PROJECT STRUCTURE
+
+### Core Components
+- **Fransync.Bridging.WebService**: Central bridge server (ASP.NET Core 9.0 Web API + WebSockets)
+- **Fransync.Client**: Client library for file monitoring and synchronization
+- **Fransync.Client.Console**: Console application implementing the client library
+- **Fransync.Bridging.WebService.Tests**: Comprehensive test suite
+
+### Technology Stack
+- **.NET Version**: 9.0
+- **C# Version**: 13.0
+- **Web Framework**: ASP.NET Core 9.0 with minimal APIs
+- **Real-time Communication**: WebSockets
+- **Containerization**: Docker with multi-stage builds
+- **CI/CD**: Azure DevOps Pipelines with GitVersion
+- **Testing**: xUnit with Moq and FluentAssertions
+- **Storage**: In-memory with thread-safe concurrent collections
+
+## CRITICAL SYSTEM BEHAVIOR & RACE CONDITION RESOLUTION
+
+### The Race Condition Problem
+Large files (350KB+) were failing to synchronize when dropped into monitored folders but worked when renamed. The issue was identified as a race condition where:
+1. Client uploads file manifest to bridge server
+2. Bridge server immediately broadcasts `manifest_received` WebSocket notification
+3. Other clients attempt to download before all file blocks are uploaded
+4. Download fails due to missing blocks
+
+### Resolution Strategy Implemented
+The system now uses a **server-authoritative completion tracking** mechanism:
+
+1. **Block Completion Tracking**: Bridge server tracks all received blocks per file
+2. **Completion Notification**: Server sends `file_upload_complete` only when ALL blocks received
+3. **Client-side Waiting**: Clients wait for completion notification before downloading
+4. **Fallback Timeout**: 60-second timeout as safety mechanism
+
+## DETAILED TECHNICAL IMPLEMENTATION
+
+### Bridge Server Architecture
+
+#### Core Services
+```
+// Service Registration in Program.cs
+builder.Services.AddSingleton<ISyncStore, InMemorySyncStore>();
+builder.Services.AddSingleton<IWebSocketManager, WebSocketManager>();
+```
+
+#### ISyncStore Interface (Enhanced with Block Tracking)
+```
+public interface ISyncStore
+{
+    // Core operations
+    void StoreManifest(FileManifest manifest);
+    void StoreBlock(BlockPayload payload);
+    FileManifest? GetManifest(string relativePath);
+    byte[]? GetBlock(string fileId, int blockIndex);
+    
+    // Block completion tracking (NEW)
+    bool IsFileComplete(string relativePath);
+    int GetReceivedBlockCount(string relativePath);
+    bool HasAllBlocksReceived(string relativePath);
+    
+    // File operations
+    bool DeleteManifest(string relativePath);
+    bool RenameManifest(string oldRelativePath, string newRelativePath);
+    
+    // Directory management
+    void StoreDirectorySnapshot(DirectorySnapshot snapshot);
+    DirectorySnapshot? GetSourceDirectorySnapshot();
+    void MarkFileAsDeleted(string relativePath);
+    IEnumerable<string> GetAllManifestPaths();
+    IEnumerable<string> GetDeletedFiles();
+}
+```
+
+#### InMemorySyncStore Implementation
+- **Thread-safe storage** using `ConcurrentDictionary<string, T>`
+- **Block tracking** with `ConcurrentDictionary<string, HashSet<int>> _receivedBlocks`
+- **Path normalization** for cross-platform compatibility
+- **Automatic cleanup** on file operations (delete, rename)
+
+#### SyncController REST API Endpoints
+```
+POST /sync/manifest     - Store file manifests
+POST /sync/block        - Store file blocks  
+POST /sync/operation    - Handle file operations (delete, rename)
+GET  /sync/manifest/{path} - Retrieve file manifest
+GET  /sync/block/{index}/{fileId} - Retrieve file block
+GET  /sync/manifests    - List all manifests
+GET  /sync/snapshot     - Get directory snapshot
+POST /sync/register-directory - Register directory structure
+GET  /sync/source-snapshot - Get source directory snapshot
+GET  /health           - Health check
+GET  /version          - Version information
+```
+
+#### WebSocket Message Types
+```
+manifest_received      - New file manifest available
+block_received        - File block received
+file_upload_complete  - ALL blocks received (NEW - key to race condition fix)
+file_operation        - File deleted/renamed
+directory_structure_updated - Directory changes
+```
+
+### Client Architecture
+
+#### File Synchronization Flow
+1. **File Detection**: `FileSystemWatcher` with debouncing detects changes
+2. **Block Generation**: Files split into 65KB blocks (configurable)
+3. **Upload Process**: 
+   - Send manifest first
+   - Send blocks sequentially
+   - Server tracks completion
+4. **Download Trigger**: Wait for `file_upload_complete` notification
+5. **Block Reassembly**: Download and reconstruct file
+
+#### Key Client Services
+- **FileSyncService**: Orchestrates file operations
+- **FileBlockService**: Handles file chunking/reconstruction
+- **WebSocketMessageHandler**: Processes real-time notifications
+- **FileDownloadService**: Manages file downloads
+- **DirectorySnapshotService**: Creates directory snapshots
+- **BridgeWebSocketClient**: WebSocket communication
+
+#### Enhanced WebSocketMessageHandler
+The handler now implements sophisticated race condition prevention:
+```
+// Key behavioral changes:
+- Tracks pending downloads with expected block counts
+- Waits for server's file_upload_complete notification
+- 60-second fallback timeout for reliability
+- Proper cleanup on file operations
+- Download retry capability on failures
+```
+
+## FILE BLOCK SYSTEM
+
+### Block Configuration
+- **Default Block Size**: 65,536 bytes (65KB)
+- **Encoding**: Base64 in JSON payloads
+- **Transport**: HTTP POST requests
+- **Hashing**: SHA-256 for integrity verification
+
+### Block Storage Pattern
+```
+Key Format: "{normalizedFilePath}#{blockIndex}"
+Example: "documents/file.txt#0", "documents/file.txt#1"
+```
+
+## CONFIGURATION STRUCTURE
+
+### Client Configuration (appsettings.json)
+```
+{
+  "SyncClient": {
+    "BridgeEndpoint": "https://localhost:5246/sync",
+    "WebSocketEndpoint": "wss://localhost:5246/ws/client",
+    "MonitoredPath": "C:\\Source",
+    "SyncWithPath": "C:\\Destination",
+    "BlockSize": 65536,
+    "RetryAttempts": 3,
+    "RetryDelaySeconds": 5
+  }
+}
+```
+
+### Bridge Server Configuration
+- **Development**: HTTPS on localhost:5246
+- **Production**: Container deployment to Azure App Service
+- **WebSocket Endpoint**: `/ws/client`
+- **API Base**: `/sync`
+
+## MODEL DEFINITIONS
+
+### Core Models (Shared Concepts)
+```
+// FileManifest - Complete file metadata
+public class FileManifest
+{
+    public string RelativePath { get; set; }
+    public string FileName { get; set; }
+    public long FileSize { get; set; }
+    public List<BlockInfo> Blocks { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+// BlockPayload - Individual file chunk
+public class BlockPayload
+{
+    public string FileId { get; set; }
+    public int BlockIndex { get; set; }
+    public string Data { get; set; } // Base64 encoded
+    public string Hash { get; set; }
+}
+
+// FileUploadCompleteNotification - Race condition resolver
+public class FileUploadCompleteNotification
+{
+    public string RelativePath { get; set; }
+    public string FileName { get; set; }
+    public long FileSize { get; set; }
+    public int BlockCount { get; set; }
+    public DateTime CompletedAt { get; set; }
+}
+
+// PendingFileDownload - Client-side tracking
+public class PendingFileDownload
+{
+    public string RelativePath { get; set; }
+    public int ExpectedBlockCount { get; set; }
+    public HashSet<int> ReceivedBlocks { get; set; }
+    public DateTime ManifestReceivedAt { get; set; }
+    public bool DownloadTriggered { get; set; }
+}
+```
+
+## CONTAINERIZATION & DEPLOYMENT
+
+### Docker Configuration
+- **Multi-stage build** with GitVersion integration
+- **Base Images**: mcr.microsoft.com/dotnet/aspnet:9.0 (runtime), mcr.microsoft.com/dotnet/sdk:9.0 (build)
+- **Security**: Non-root user execution
+- **Port Exposure**: 8080 (HTTP), 8081 (HTTPS)
+
+### Azure DevOps Pipeline
+- **GitVersion**: Semantic versioning (format: 0.1.0.{buildId})
+- **Build Stages**: Restore → Build → Test → Publish → Containerize
+- **Deployment**: Azure Container Registry → Azure App Service
+- **Environment Variables**: Container detection for HTTPS handling
+
+## TESTING STRATEGY
+
+### Test Coverage
+- **Unit Tests**: SyncController, InMemorySyncStore, WebSocketManager
+- **Integration Tests**: End-to-end API testing with WebApplicationFactory
+- **Mocking**: Comprehensive mocking with Moq
+- **Assertions**: Fluent assertions for readable test code
+
+### Key Test Scenarios
+- File upload/download cycles
+- Block completion tracking
+- WebSocket notification delivery
+- Concurrent access patterns
+- Error handling and recovery
+- Path normalization across platforms
+
+## LOGGING & MONITORING
+
+### Structured Logging
+- **Provider**: Microsoft.Extensions.Logging with console output
+- **Log Levels**: Debug, Information, Warning, Error
+- **Key Events**: File operations, WebSocket connections, block transfers
+- **Performance Tracking**: Upload/download timing, block counts
+
+### Health Monitoring
+```
+GET /health - Returns:
+{
+  "status": "healthy",
+  "timestamp": "2024-01-01T00:00:00Z",
+  "service": "Fransync.Bridging.WebService"
+}
+```
+
+## CURRENT STATUS & RECENT ENHANCEMENTS
+
+### ✅ Completed Features
+- Core file synchronization functionality
+- WebSocket real-time notifications
+- Block-based file transfer with integrity checking
+- Race condition resolution with server-authoritative completion
+- Docker containerization with semantic versioning
+- Azure DevOps CI/CD pipeline
+- Comprehensive test suite
+- Production deployment to Azure App Service
+- Cross-platform path normalization
+- Directory snapshot functionality
+
+### 🔧 Recent Race Condition Fixes
+1. **Server-side block completion tracking** in InMemorySyncStore
+2. **Enhanced SyncController** with file_upload_complete notifications
+3. **Improved WebSocketMessageHandler** waiting for completion signals
+4. **Client-side FileUploadCompleteNotification model** creation
+5. **Timeout mechanisms** for reliability (60-second fallback)
+
+### 📁 Project File Structure
+```
+src/
+├── Fransync.Bridging.WebService/
+│   ├── Controllers/SyncController.cs
+│   ├── Services/
+│   │   ├── ISyncStore.cs
+│   │   ├── InMemorySyncStore.cs
+│   │   ├── IWebSocketManager.cs
+│   │   └── WebSocketManager.cs
+│   ├── Middleware/WebSocketClientMiddleware.cs
+│   ├── Models/
+│   │   ├── FileManifest.cs
+│   │   ├── BlockPayload.cs
+│   │   ├── WebSocketMessage.cs
+│   │   └── FileUploadCompleteNotification.cs
+│   ├── Program.cs
+│   └── Dockerfile
+├── Fransync.Client/
+│   ├── Services/
+│   │   ├── FileSyncService.cs
+│   │   ├── WebSocketMessageHandler.cs
+│   │   ├── FileDownloadService.cs
+│   │   ├── DirectorySnapshotService.cs
+│   │   └── SyncClientHostedService.cs
+│   ├── Models/
+│   │   ├── PendingFileDownload.cs
+│   │   ├── ManifestNotification.cs
+│   │   ├── BlockNotification.cs
+│   │   └── FileUploadCompleteNotification.cs
+│   └── Configuration/SyncClientOptions.cs
+└── Fransync.Client.Console/
+    └── Program.cs
+```
+
+## USAGE INSTRUCTIONS FOR AI ASSISTANTS
+
+When working with this system:
+
+1. **Always examine these key files first**:
+   - `src/Fransync.Bridging.WebService/Program.cs`
+   - `src/Fransync.Bridging.WebService/Controllers/SyncController.cs`
+   - `src/Fransync.Bridging.WebService/Services/InMemorySyncStore.cs`
+   - `src/Fransync.Client/Services/WebSocketMessageHandler.cs`
+
+2. **For race condition related issues**, focus on:
+   - Block completion tracking in `InMemorySyncStore`
+   - `file_upload_complete` notification handling
+   - `PendingFileDownload` tracking in client
+
+3. **Maintain established patterns**:
+   - Path normalization using `NormalizePath()`
+   - WebSocket notifications after operations
+   - Thread-safe concurrent operations
+   - Comprehensive error handling and logging
+
+4. **Key constraints to remember**:
+   - Block size: 65KB (configurable)
+   - .NET 9.0 and C# 13.0 features available
+   - Cross-platform compatibility required
+   - Production deployment on Azure App Service containers
+
+This system represents a production-ready, scalable file synchronization solution with robust handling of the identified race condition through server-authoritative completion tracking.

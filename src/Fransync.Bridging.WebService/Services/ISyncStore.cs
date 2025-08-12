@@ -16,4 +16,9 @@ public interface ISyncStore
     DirectorySnapshot? GetSourceDirectorySnapshot();
     void MarkFileAsDeleted(string relativePath);
     IEnumerable<string> GetDeletedFiles();
+
+    // Enhanced block completion tracking
+    bool IsFileComplete(string relativePath);
+    int GetReceivedBlockCount(string relativePath);
+    bool HasAllBlocksReceived(string relativePath);
 }
