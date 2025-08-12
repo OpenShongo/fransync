@@ -32,6 +32,12 @@ public class Program
             app.MapOpenApi();
         }
 
+        if (!app.Environment.IsProduction() ||
+            Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
+        {
+            app.UseHttpsRedirection();
+        }
+
         app.UseHttpsRedirection();
         app.UseAuthorization();
 

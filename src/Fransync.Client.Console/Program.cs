@@ -31,6 +31,10 @@ public class Program
             .ConfigureAppConfiguration((context, config) =>
             {
                 config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+                if (context.HostingEnvironment.IsDevelopment())
+                {
+                    config.AddJsonFile("appsettings.Development.json", optional: false, reloadOnChange: true);
+                }
             })
             .ConfigureServices((context, services) =>
             {
