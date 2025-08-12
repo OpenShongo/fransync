@@ -59,25 +59,11 @@ public class Program
         {
             var assembly = Assembly.GetExecutingAssembly();
             var version = assembly.GetName().Version?.ToString() ?? "unknown";
-            var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? version;
-            var pipelineVersion = Environment.GetEnvironmentVariable("VERSION");
 
             return Results.Ok(new
             {
                 service = "Fransync.Bridging.WebService",
-                version = new
-                {
-                    assembly = version,
-                    informational = informationalVersion,
-                    pipeline = pipelineVersion ?? "unknown",
-                    display = pipelineVersion ?? informationalVersion
-                },
-                build = new
-                {
-                    environment = app.Environment.EnvironmentName,
-                    framework = Environment.Version.ToString(),
-                    dotnetVersion = Environment.GetEnvironmentVariable("DOTNET_VERSION") ?? "unknown"
-                },
+                version,
                 timestamp = DateTime.UtcNow
             });
         });

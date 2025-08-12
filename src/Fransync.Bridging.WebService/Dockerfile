@@ -20,16 +20,25 @@ COPY . .
 WORKDIR "/src/src/Fransync.Bridging.WebService"
 RUN dotnet build "Fransync.Bridging.WebService.csproj" -c $BUILD_CONFIGURATION -o /app/build \
 	/p:Version=${VERSION} \
-	/p:InformationalVersion=${VERSION}
+	/p:AssemblyVersion=${VERSION} \
+	/p:FileVersion=${VERSION} \
+	/p:InformationalVersion=${VERSION} \
+	/p:AssemblyTitle="Fransync Bridging Web Service" \
+	/p:AssemblyDescription="File synchronization bridging service" \
+	/p:AssemblyProduct="Fransync"
 
 # This stage is used to publish the service project to be copied to the final stage
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
 ARG VERSION=1.0.0
 RUN dotnet publish "Fransync.Bridging.WebService.csproj" -c $BUILD_CONFIGURATION -o /app/publish \
-	/p:UseAppHost=false \
 	/p:Version=${VERSION} \
-	/p:InformationalVersion=${VERSION}
+	/p:AssemblyVersion=${VERSION} \
+	/p:FileVersion=${VERSION} \
+	/p:InformationalVersion=${VERSION} \
+	/p:AssemblyTitle="Fransync Bridging Web Service" \
+	/p:AssemblyDescription="File synchronization bridging service" \
+	/p:AssemblyProduct="Fransync"
 
 # This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
 FROM base AS final
