@@ -1,10 +1,13 @@
-﻿using System.Text.Json;
-using Fransync.Client.Configuration;
+﻿using Fransync.Client.Configuration;
 using Fransync.Client.Services;
+using Fransync.Client.Services.Queue;
+using Fransync.Client.Services.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using System.Text.Json;
 
 namespace Fransync.Client.Console;
 
@@ -45,7 +48,28 @@ public class Program
                 // HTTP Client
                 services.AddHttpClient<IBridgeHttpClient, BridgeHttpClient>();
 
-                // Services
+                // These are critical!
+                // FIXED: Register LocalQueueManager with proper factory
+                services.AddScoped<ILocalQueueManager>(serviceProvider =>
+                {
+                    var options = serviceProvider.GetRequiredService<IOptions<SyncClientOptions>>().Value;
+                    var logger = serviceProvider.GetRequiredService<ILogger<LocalQueueManager>>();
+
+                    // Use MonitoredPath as the base path for .fransync directory
+                    return new LocalQueueManager(options.MonitoredPath, logger);
+                });
+
+                // FIXED: Register LocalBlockStore with proper factory
+                services.AddScoped<ILocalBlockStore>(serviceProvider =>
+                {
+                    var options = serviceProvider.GetRequiredService<IOptions<SyncClientOptions>>().Value;
+                    var logger = serviceProvider.GetRequiredService<ILogger<LocalBlockStore>>();
+
+                    // Use MonitoredPath as the base path for .fransync directory
+                    return new LocalBlockStore(options.MonitoredPath, logger);
+                });
+
+                // Existing services
                 services.AddSingleton<IFileBlockService, FileBlockService>();
                 services.AddSingleton<IBridgeWebSocketClient, BridgeWebSocketClient>();
                 services.AddSingleton<IFileWatcherService, FileWatcherService>();

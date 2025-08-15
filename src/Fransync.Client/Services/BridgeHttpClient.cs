@@ -77,4 +77,71 @@ public class BridgeHttpClient(
             return false;
         }
     }
+
+    public async Task<FileManifest?> GetManifestAsync(string relativePath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // URL encode the relative path to handle special characters
+            var encodedPath = Uri.EscapeDataString(relativePath);
+            var response = await httpClient.GetAsync($"{_options.BridgeEndpoint}/manifest/{encodedPath}", cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync(cancellationToken);
+                var manifest = JsonSerializer.Deserialize<FileManifest>(json);
+
+                logger.LogInformation("[MANIFEST RETRIEVED] {RelativePath}", relativePath);
+                return manifest;
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                logger.LogDebug("[MANIFEST NOT FOUND] {RelativePath}", relativePath);
+                return null;
+            }
+
+            logger.LogWarning("[MANIFEST GET FAILED] {RelativePath} | {StatusCode}", relativePath, response.StatusCode);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "[MANIFEST GET ERROR] {RelativePath}", relativePath);
+            return null;
+        }
+    }
+
+    public async Task<byte[]?> GetBlockAsync(string relativePath, int blockIndex, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // URL encode the relative path to handle special characters
+            var encodedPath = Uri.EscapeDataString(relativePath);
+            var response = await httpClient.GetAsync($"{_options.BridgeEndpoint}/block/{blockIndex}/{encodedPath}", cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var blockData = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+
+                logger.LogInformation("[BLOCK RETRIEVED] {RelativePath} | Block {Index} | {Size} bytes",
+                    relativePath, blockIndex, blockData.Length);
+                return blockData;
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                logger.LogDebug("[BLOCK NOT FOUND] {RelativePath} | Block {Index}", relativePath, blockIndex);
+                return null;
+            }
+
+            logger.LogWarning("[BLOCK GET FAILED] {RelativePath} | Block {Index} | {StatusCode}",
+                relativePath, blockIndex, response.StatusCode);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "[BLOCK GET ERROR] {RelativePath} | Block {Index}", relativePath, blockIndex);
+            return null;
+        }
+    }
 }

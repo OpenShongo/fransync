@@ -18,4 +18,15 @@ public class FileBlockService : IFileBlockService
             yield return (index++, block, hash);
         }
     }
+
+    public IEnumerable<byte[]> SplitIntoBlocks(byte[] fileData, int blockSize)
+    {
+        for (int offset = 0; offset < fileData.Length; offset += blockSize)
+        {
+            var size = Math.Min(blockSize, fileData.Length - offset);
+            var block = new byte[size];
+            Array.Copy(fileData, offset, block, 0, size);
+            yield return block;
+        }
+    }
 }

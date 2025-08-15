@@ -7,14 +7,17 @@ namespace Fransync.Client.Services;
 
 public class WebSocketMessageHandler : IWebSocketMessageHandler
 {
-    private readonly IFileDownloadService _downloadService;
+    private readonly IFileSyncService _fileSyncService;
+    private readonly IFileDownloadService _downloadService; // Keep for backward compatibility
     private readonly ILogger<WebSocketMessageHandler> _logger;
     private readonly ConcurrentDictionary<string, PendingFileDownload> _pendingDownloads = new();
 
     public WebSocketMessageHandler(
+        IFileSyncService fileSyncService,
         IFileDownloadService downloadService,
         ILogger<WebSocketMessageHandler> logger)
     {
+        _fileSyncService = fileSyncService;
         _downloadService = downloadService;
         _logger = logger;
     }
@@ -69,7 +72,10 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
             _logger.LogInformation("New manifest available: {RelativePath} ({BlockCount} blocks expected)",
                 manifestNotification.RelativePath, manifestNotification.BlockCount);
 
-            // Create or update pending download tracking
+            // Use the new decentralized FileSyncService
+            await _fileSyncService.HandleIncomingManifestAsync(manifestNotification, cancellationToken);
+
+            // Create or update pending download tracking for monitoring
             var pendingDownload = new PendingFileDownload
             {
                 RelativePath = manifestNotification.RelativePath,
@@ -94,9 +100,13 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
                     if (_pendingDownloads.TryGetValue(manifestNotification.RelativePath, out var pending) &&
                         !pending.DownloadTriggered)
                     {
-                        _logger.LogWarning("Timeout waiting for upload completion for {RelativePath}, downloading anyway ({ReceivedBlocks}/{ExpectedBlocks} blocks)",
+                        _logger.LogWarning("Timeout waiting for upload completion for {RelativePath}, initiating download anyway ({ReceivedBlocks}/{ExpectedBlocks} blocks)",
                             manifestNotification.RelativePath, pending.ReceivedBlocks.Count, pending.ExpectedBlockCount);
-                        await TriggerDownload(manifestNotification.RelativePath, cancellationToken);
+
+                        // Generate a fallback manifest hash
+                        var fallbackHash = $"manifest_{manifestNotification.RelativePath}_{DateTime.UtcNow.Ticks}";
+                        await _fileSyncService.InitiateFileDownloadAsync(manifestNotification.RelativePath, fallbackHash, cancellationToken);
+                        pending.DownloadTriggered = true;
                     }
                 }, TaskContinuationOptions.OnlyOnRanToCompletion);
             }
@@ -113,7 +123,7 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
             _logger.LogDebug("Block received for file: {FileId}, Block: {BlockIndex}",
                 blockNotification.FileId, blockNotification.BlockIndex);
 
-            // Track block completion
+            // Track block completion for monitoring
             if (_pendingDownloads.TryGetValue(blockNotification.FileId, out var pendingDownload))
             {
                 pendingDownload.ReceivedBlocks.Add(blockNotification.BlockIndex);
@@ -122,7 +132,7 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
                     blockNotification.FileId, pendingDownload.ReceivedBlocks.Count, pendingDownload.ExpectedBlockCount);
 
                 // Note: We no longer trigger download here directly, instead we wait for file_upload_complete
-                // This prevents the race condition more reliably
+                // The decentralized system will handle block downloading through the queue system
             }
         }
     }
@@ -137,44 +147,20 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
             _logger.LogInformation("File upload completed: {RelativePath} ({BlockCount} blocks)",
                 completionNotification.RelativePath, completionNotification.BlockCount);
 
-            // This is the definitive signal that all blocks are available
-            await TriggerDownload(completionNotification.RelativePath, cancellationToken);
-        }
-    }
+            // Use the new decentralized FileSyncService to handle upload completion
+            await _fileSyncService.HandleFileUploadCompleteAsync(completionNotification, cancellationToken);
 
-    private async Task TriggerDownload(string relativePath, CancellationToken cancellationToken)
-    {
-        if (_pendingDownloads.TryGetValue(relativePath, out var pendingDownload))
-        {
-            if (pendingDownload.DownloadTriggered)
+            // Update pending download tracking
+            if (_pendingDownloads.TryGetValue(completionNotification.RelativePath, out var pendingDownload))
             {
-                _logger.LogDebug("Download already triggered for {RelativePath}", relativePath);
-                return;
-            }
+                pendingDownload.DownloadTriggered = true;
 
-            pendingDownload.DownloadTriggered = true;
-
-            // Small delay to ensure all blocks are fully stored
-            await Task.Delay(150, cancellationToken);
-
-            var success = await _downloadService.DownloadFileAsync(relativePath, cancellationToken);
-
-            if (success)
-            {
-                _logger.LogInformation("Successfully downloaded {RelativePath}", relativePath);
-            }
-            else
-            {
-                _logger.LogWarning("Failed to download {RelativePath}", relativePath);
-
-                // Mark as not triggered so retry mechanisms can work
-                pendingDownload.DownloadTriggered = false;
-            }
-
-            // Clean up tracking only on success
-            if (success)
-            {
-                _pendingDownloads.TryRemove(relativePath, out _);
+                // Clean up tracking after a delay to allow the download queue to process
+                _ = Task.Delay(TimeSpan.FromSeconds(30), cancellationToken).ContinueWith(b =>
+                {
+                    _pendingDownloads.TryRemove(completionNotification.RelativePath, out var c);
+                    _logger.LogDebug("Cleaned up pending download tracking for {RelativePath}", completionNotification.RelativePath);
+                }, TaskContinuationOptions.OnlyOnRanToCompletion);
             }
         }
     }
@@ -193,10 +179,27 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
 
                 // Clean up any pending downloads for this file
                 _pendingDownloads.TryRemove(fileOperation.RelativePath, out _);
+
+                // Use decentralized system to handle deletion
+                await _fileSyncService.ProcessFileDeletedAsync(fileOperation.RelativePath, cancellationToken);
                 break;
 
             case FileOperationType.Renamed:
                 await HandleFileRename(fileOperation, cancellationToken);
+                break;
+
+            case FileOperationType.Created:
+                _logger.LogInformation("File creation notification received: {RelativePath}", fileOperation.RelativePath);
+                // Creation is typically handled by manifest_received and file_upload_complete
+                break;
+
+            case FileOperationType.Modified:
+                _logger.LogInformation("File modification notification received: {RelativePath}", fileOperation.RelativePath);
+                // Modification is typically handled by manifest_received and file_upload_complete
+                break;
+
+            default:
+                _logger.LogDebug("Unknown file operation type: {OperationType}", fileOperation.OperationType);
                 break;
         }
     }
@@ -215,12 +218,78 @@ public class WebSocketMessageHandler : IWebSocketMessageHandler
         // Clean up pending downloads for old path
         _pendingDownloads.TryRemove(operation.OldRelativePath, out _);
 
+        // Use decentralized system to handle rename
+        await _fileSyncService.ProcessFileRenamedAsync(operation.OldRelativePath, operation.RelativePath, cancellationToken);
+
+        // Fallback to direct download service for compatibility
         var renamed = await _downloadService.RenameFileAsync(operation.OldRelativePath, operation.RelativePath, cancellationToken);
 
         if (!renamed)
         {
-            _logger.LogInformation("Source file not found for rename, downloading new file: {RelativePath}", operation.RelativePath);
-            await _downloadService.DownloadFileAsync(operation.RelativePath, cancellationToken);
+            _logger.LogInformation("Source file not found for rename, will be handled by download queue: {RelativePath}", operation.RelativePath);
+            // The FileSyncService.ProcessFileRenamedAsync already queues the new file for upload/download
         }
+    }
+
+    // Additional helper method to get current download status
+    public async Task<Dictionary<string, object>> GetDownloadStatusAsync()
+    {
+        var status = new Dictionary<string, object>();
+
+        foreach (var pending in _pendingDownloads)
+        {
+            status[pending.Key] = new
+            {
+                RelativePath = pending.Value.RelativePath,
+                ExpectedBlocks = pending.Value.ExpectedBlockCount,
+                ReceivedBlocks = pending.Value.ReceivedBlocks.Count,
+                Progress = pending.Value.ExpectedBlockCount > 0
+                    ? (double)pending.Value.ReceivedBlocks.Count / pending.Value.ExpectedBlockCount * 100
+                    : 0,
+                ManifestReceivedAt = pending.Value.ManifestReceivedAt,
+                DownloadTriggered = pending.Value.DownloadTriggered
+            };
+        }
+
+        // Also get queue status from FileSyncService
+        try
+        {
+            var syncStatus = await _fileSyncService.GetSyncStatusAsync();
+            status["_queueStatus"] = new
+            {
+                PendingUploads = syncStatus.PendingUploads,
+                PendingDownloads = syncStatus.PendingDownloads,
+                PendingOperations = syncStatus.PendingOperations,
+                IsHealthy = syncStatus.IsHealthy,
+                Issues = syncStatus.Issues
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get sync status");
+        }
+
+        return status;
+    }
+
+    // Cleanup method for periodic maintenance
+    public async Task PerformMaintenanceAsync(CancellationToken cancellationToken = default)
+    {
+        var cutoff = DateTime.UtcNow.AddMinutes(-30); // Clean up entries older than 30 minutes
+        var toRemove = _pendingDownloads
+            .Where(kvp => kvp.Value.ManifestReceivedAt < cutoff && kvp.Value.DownloadTriggered)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in toRemove)
+        {
+            _pendingDownloads.TryRemove(key, out _);
+        }
+
+        if (toRemove.Count > 0)
+        {
+            _logger.LogDebug("Cleaned up {Count} old pending download entries", toRemove.Count);
+        }
+        await Task.CompletedTask;
     }
 }
